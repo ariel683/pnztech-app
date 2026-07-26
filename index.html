@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PNZ Tech - Órdenes de Trabajo</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root { --primary: #2b5cb1; --accent: #e74c3c; --bg: #f4f6f7; --text: #1a252c; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); margin: 0; padding: 15px; color: var(--text); }
+    .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    h2 { color: var(--primary); margin-top: 0; font-size: 1.2rem; border-bottom: 2px solid var(--primary); padding-bottom: 8px; }
+    label { font-size: 0.85rem; font-weight: bold; color: #7f8c8d; display: block; margin-top: 12px; margin-bottom: 4px; }
+    input, select, textarea { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 1rem; }
+    textarea { height: 90px; resize: vertical; }
+
+    .nav-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+    .btn-nav { 
+      background: #ffffff; 
+      color: var(--primary); 
+      border: 2px solid var(--primary); 
+      padding: 12px 8px; 
+      border-radius: 8px; 
+      font-weight: bold; 
+      font-size: 0.85rem; 
+      cursor: pointer; 
+      text-align: center;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .btn-nav.active { 
+      background: var(--primary); 
+      color: white; 
+      border-color: var(--primary); 
+      transform: scale(0.98);
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .btn { background: var(--primary); color: white; border: none; width: 100%; padding: 14px; border-radius: 8px; font-weight: bold; font-size: 1rem; margin-top: 15px; cursor: pointer; }
+    .btn-secondary { background: #6c757d; margin-top: 8px; }
+    .btn-success { background: #27ae60; }
+    .btn-warning { background: #e67e22; }
+    .btn-danger { background: #e74c3c; padding: 6px 12px; font-size: 0.8rem; width: auto; margin-top: 0; }
+    .btn-wa { background: #25D366; }
+    .hidden { display: none; }
+    .badge { background: #e2e8f0; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
+    .badge-pending { background: #ffeaa7; color: #d63031; }
+    .list-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
+    .ot-card-pending { border-left: 4px solid #f1c40f; padding: 12px; background: #fff; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .action-row { display: flex; gap: 8px; margin-top: 10px; }
+    .action-row button { flex: 1; padding: 8px; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+
+  <!-- PANTALLA PRINCIPAL DE LA APP -->
+  <div id="app-screen">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+      <span style="font-weight:bold; color:var(--primary); font-size:1.1rem;">PNZ Tech System</span>
+      <span style="font-size:0.8rem; color:#27ae60; font-weight:bold;">🟢 En Línea</span>
+    </div>
+
+    <!-- NAVEGACIÓN UNIFORME -->
+    <div class="nav-grid">
+      <button id="nav-nueva" class="btn-nav active" onclick="cambiarVista('seccion-nueva-ot', 'nav-nueva')">📋 Nueva OT</button>
+      <button id="nav-pendientes" class="btn-nav" onclick="cambiarVista('seccion-pendientes', 'nav-pendientes'); mostrarPendientes();">⏳ Pendientes (<span id="count-pending">0</span>)</button>
+      <button id="nav-cliente" class="btn-nav" onclick="cambiarVista('modal-cliente', 'nav-cliente')">➕ Cliente / Sitio</button>
+      <button id="nav-admin" class="btn-nav" onclick="cambiarVista('modal-gestion', 'nav-admin')">🗑️ Administrar</button>
+    </div>
+
+    <!-- SECCIÓN: NUEVA ORDEN DE TRABAJO -->
+    <div id="seccion-nueva-ot" class="card vista-seccion">
+      <h2 id="titulo-form-ot">📋 Nueva Orden de Trabajo</h2>
+      
+      <label>Cliente / Razón Social</label>
+      <select id="select-cliente" onchange="cargarSitios()"></select>
+
+      <label>Sitio / Sucursal</label>
+      <select id="select-sitio"></select>
+
+      <label>Categoría del Servicio</label>
+      <select id="input-cat">
+        <option>CCTV & Mantenimiento de Redes</option>
+        <option>Mantenimiento Preventivo</option>
+        <option>Mantenimiento Correctivo</option>
+        <option>Electricidad & Seguridad</option>
+      </select>
+
+      <label>Descripción del Problema / Necesidad</label>
+      <textarea id="input-problema" placeholder="Detalla la falla acontecida..."></textarea>
+
+      <button id="btn-guardar-ot" class="btn" onclick="crearOActualizarOrden()">1. REGISTRAR SOLICITUD</button>
+      <button id="btn-cancelar-edit" class="btn btn-secondary hidden" onclick="cancelarEdicion()">Cancelar Edición</button>
+    </div>
+
+    <!-- SECCIÓN: SOLICITUDES PENDIENTES DE CIERRE -->
+    <div id="seccion-pendientes" class="card vista-seccion hidden" style="border:2px solid #f1c40f;">
+      <h2>⏳ Órdenes Pendientes de Cierre</h2>
+      <div id="container-pendientes">Cargando pendientes...</div>
+    </div>
+
+    <!-- SECCIÓN: AGREGAR CLIENTE O SITIO -->
+    <div id="modal-cliente" class="card vista-seccion hidden" style="border:2px solid var(--primary);">
+      <h2>➕ Dar de Alta Cliente / Sitio</h2>
+      <label>Razón Social / Nombre del Cliente *</label>
+      <input type="text" id="new-client-name" placeholder="Ej: Transportes del Sur S.A.">
+      <label>CUIT / Identificación Fiscal</label>
+      <input type="text" id="new-client-cuit" placeholder="Ej: 30-12345678-9">
+      <label>Email para Notificaciones *</label>
+      <input type="email" id="new-client-email" placeholder="contacto@cliente.com">
+      <label>Teléfono de Contacto</label>
+      <input type="text" id="new-client-phone" placeholder="+54 9 11 1234-5678">
+      <button class="btn btn-success" onclick="guardarCliente()">GUARDAR CLIENTE</button>
+      
+      <hr style="margin:20px 0; border:0; border-top:1px solid #ccc;">
+
+      <h2>🏢 Agregar Sitio a Cliente Existente</h2>
+      <label>Selecciona el Cliente *</label>
+      <select id="modal-select-cliente"></select>
+      <label>Nombre del Sitio / Sucursal *</label>
+      <input type="text" id="new-site-name" placeholder="Ej: Depósito Central">
+      <label>Dirección Completa *</label>
+      <input type="text" id="new-site-address" placeholder="Ej: Av. Rivadavia 1234">
+      <button class="btn btn-secondary" onclick="guardarSitio()">GUARDAR SITIO</button>
+    </div>
+
+    <!-- SECCIÓN: GESTIÓN DE ELIMINACIÓN -->
+    <div id="modal-gestion" class="card vista-seccion hidden">
+      <h2>🗑️ Eliminar Clientes y Sitios</h2>
+      <label>Clientes Cargados</label>
+      <div id="lista-clientes-delete"></div>
+      
+      <label style="margin-top:20px;">Sitios Cargados</label>
+      <div id="lista-sitios-delete"></div>
+    </div>
+
+    <!-- SECCIÓN: CIERRE DE ORDEN -->
+    <div id="cierre-card" class="card hidden">
+      <h2>✔ Finalizar Tarea y Emitir Comprobante</h2>
+      <p><b>OT Activa:</b> <span id="ot-num-badge" class="badge"></span></p>
+
+      <label>Tareas Realizadas / Solución Aplicada</label>
+      <textarea id="input-tareas" placeholder="Detalla el trabajo efectuado en sitio..."></textarea>
+
+      <label>Materiales / Insumos Utilizados</label>
+      <input type="text" id="input-insumos" placeholder="Ej: 4x RJ45 Cat6, 2m Cable PatchCord">
+
+      <label>Nombre del Cliente que Recibe</label>
+      <input type="text" id="input-firmante" placeholder="Ej: María López">
+
+      <label>DNI / Identificación</label>
+      <input type="text" id="input-dni" placeholder="Ej: 32.456.789">
+
+      <button class="btn btn-success" onclick="finalizarOrden()">2. GUARDAR Y FINALIZAR</button>
+    </div>
+
+    <!-- ACCIONES POST-COMPROBANTE -->
+    <div id="exito-card" class="card hidden">
+      <h2 style="color: #27ae60;">🎉 ¡Orden Finalizada con Éxito!</h2>
+      <button class="btn btn-wa" onclick="enviarWhatsApp()">📲 ENVIAR POR WHATSAPP</button>
+      <button class="btn" style="background:#34495e;" onclick="nuevaCaptura()">➕ Crear Nueva Orden</button>
+    </div>
+
+  </div>
+
+  <script>
+    // ⚙️ PEGA AQUÍ TUS CLAVES DE SUPABASE PARA AUTOCONEXIÓN PERMANENTE:
+    const DEFAULT_URL = 'https://ebiqkyinlachaoyafyin.supabase.co'; 
+    const DEFAULT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViaXFreWlubGFjaGFveWFmeWluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwMTc4MjksImV4cCI6MjEwMDU5MzgyOX0.OZ141ZXb_qKRlKmydYJHplqMc6s6cMFbrr4odHlpBoM';
+
+    let _supabase, clientList = [], currentOT = null, editOTId = null;
+
+    function cambiarVista(idSeccion, idBtn) {
+      document.querySelectorAll('.vista-seccion').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.btn-nav').forEach(btn => btn.classList.remove('active'));
+
+      document.getElementById(idSeccion).classList.remove('hidden');
+      document.getElementById(idBtn).classList.add('active');
+    }
+
+    async function iniciarApp() {
+      try {
+        _supabase = window.supabase.createClient(DEFAULT_URL, DEFAULT_KEY);
+        await cargarClientes();
+        await actualizarContadorPendientes();
+      } catch (err) {
+        alert("Error al conectar con Supabase. Verifica que pegaste bien la URL y Key en el archivo index.html.");
+      }
+    }
+
+    async function cargarClientes() {
+      const { data: clientes, error } = await _supabase.from('clientes').select('*').order('razon_social', { ascending: true });
+      if (error) throw error;
+
+      clientList = clientes || [];
+      const selMain = document.getElementById('select-cliente');
+      const selModal = document.getElementById('modal-select-cliente');
+
+      if (clientList.length === 0) {
+        selMain.innerHTML = '<option value="">(Sin clientes cargados)</option>';
+        selModal.innerHTML = '<option value="">(Sin clientes)</option>';
+      } else {
+        const optionsHtml = clientList.map(c => `<option value="${c.id}">${c.razon_social}</option>`).join('');
+        selMain.innerHTML = optionsHtml;
+        selModal.innerHTML = optionsHtml;
+        cargarSitios();
+      }
+
+      renderListaGestion();
+    }
+
+    async function cargarSitios() {
+      const clienteId = document.getElementById('select-cliente').value;
+      const sel = document.getElementById('select-sitio');
+
+      if (!clienteId) {
+        sel.innerHTML = '<option value="">(Sin sitio)</option>';
+        return;
+      }
+
+      const { data: sitios } = await _supabase.from('sitios').select('*').eq('cliente_id', clienteId);
+      if (!sitios || sitios.length === 0) {
+        sel.innerHTML = '<option value="">(Agrega un sitio para este cliente)</option>';
+        return;
+      }
+
+      sel.innerHTML = sitios.map(s => `<option value="${s.id}">${s.nombre_sitio} - ${s.direccion}</option>`).join('');
+    }
+
+    async function renderListaGestion() {
+      const divClientes = document.getElementById('lista-clientes-delete');
+      divClientes.innerHTML = clientList.map(c => `
+        <div class="list-item">
+          <span><b>${c.razon_social}</b></span>
+          <button class="btn btn-danger" onclick="eliminarCliente('${c.id}', '${c.razon_social}')">Eliminar</button>
+        </div>
+      `).join('');
+
+      const { data: sitios } = await _supabase.from('sitios').select('*, clientes(razon_social)');
+      const divSitios = document.getElementById('lista-sitios-delete');
+      divSitios.innerHTML = (sitios || []).map(s => `
+        <div class="list-item">
+          <span><b>${s.nombre_sitio}</b> (${s.clientes?.razon_social || 'S/C'})</span>
+          <button class="btn btn-danger" onclick="eliminarSitio('${s.id}', '${s.nombre_sitio}')">Eliminar</button>
+        </div>
+      `).join('');
+    }
+
+    async function eliminarCliente(id, nombre) {
+      if (!confirm(`¿Seguro que deseas eliminar al cliente "${nombre}"?`)) return;
+      await _supabase.from('clientes').delete().eq('id', id);
+      cargarClientes();
+    }
+
+    async function eliminarSitio(id, nombre) {
+      if (!confirm(`¿Seguro que deseas eliminar el sitio "${nombre}"?`)) return;
+      await _supabase.from('sitios').delete().eq('id', id);
+      cargarClientes();
+    }
+
+    async function actualizarContadorPendientes() {
+      const { data } = await _supabase.from('ordenes_trabajo').select('id').eq('estado', 'Pendiente');
+      document.getElementById('count-pending').innerText = (data || []).length;
+    }
+
+    async function mostrarPendientes() {
+      const { data: pendientes } = await _supabase
+        .from('ordenes_trabajo')
+        .select('*, clientes(razon_social), sitios(nombre_sitio, direccion)')
+        .eq('estado', 'Pendiente')
+        .order('fecha_recepcion', { ascending: false });
+
+      const container = document.getElementById('container-pendientes');
+
+      if (!pendientes || pendientes.length === 0) {
+        container.innerHTML = '<p>🎉 No hay solicitudes pendientes de cierre.</p>';
+        return;
+      }
+
+      container.innerHTML = pendientes.map(ot => `
+        <div class="ot-card-pending">
+          <div style="display:flex; justify-content:space-between;">
+            <b style="color:var(--accent);">${ot.numero_correlativo}</b>
+            <span class="badge badge-pending">PENDIENTE</span>
+          </div>
+          <div style="font-weight:bold; margin-top:5px;">${ot.clientes?.razon_social || 'Cliente'}</div>
+          <div style="font-size:0.85rem; color:#555;">📍 ${ot.sitios?.nombre_sitio || ''} (${ot.sitios?.direccion || ''})</div>
+          <div style="font-size:0.9rem; margin-top:6px; background:#f8f9fa; padding:6px; border-radius:4px;"><b>Problema:</b> ${ot.descripcion_problema}</div>
+          
+          <div class="action-row">
+            <button class="btn btn-warning" onclick="editarSolicitud('${ot.id}')">✏️ Editar</button>
+            <button class="btn btn-success" onclick="seleccionarOTParaCierre('${ot.id}')">▶ Finalizar</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function editarSolicitud(otId) {
+      const { data: ot } = await _supabase.from('ordenes_trabajo').select('*').eq('id', otId).single();
+      if (!ot) return;
+
+      editOTId = ot.id;
+      document.getElementById('select-cliente').value = ot.cliente_id;
+      await cargarSitios();
+      document.getElementById('select-sitio').value = ot.sitio_id;
+      document.getElementById('input-cat').value = ot.categoria_problema;
+      document.getElementById('input-problema').value = ot.descripcion_problema;
+
+      document.getElementById('titulo-form-ot').innerText = "✏️ Editar Solicitud (" + ot.numero_correlativo + ")";
+      document.getElementById('btn-guardar-ot').innerText = "GUARDAR CAMBIOS EN LA SOLICITUD";
+      document.getElementById('btn-cancelar-edit').classList.remove('hidden');
+
+      cambiarVista('seccion-nueva-ot', 'nav-nueva');
+    }
+
+    function cancelarEdicion() {
+      editOTId = null;
+      document.getElementById('input-problema').value = '';
+      document.getElementById('titulo-form-ot').innerText = "📋 Nueva Orden de Trabajo";
+      document.getElementById('btn-guardar-ot').innerText = "1. REGISTRAR SOLICITUD";
+      document.getElementById('btn-cancelar-edit').classList.add('hidden');
+    }
+
+    async function crearOActualizarOrden() {
+      const clienteId = document.getElementById('select-cliente').value;
+      const sitioId = document.getElementById('select-sitio').value;
+      const categoria = document.getElementById('input-cat').value;
+      const problema = document.getElementById('input-problema').value;
+
+      if (!clienteId || !sitioId || !problema) return alert("Completa todos los campos obligatorios.");
+
+      if (editOTId) {
+        const { error } = await _supabase.from('ordenes_trabajo').update({
+          cliente_id: clienteId,
+          sitio_id: sitioId,
+          categoria_problema: categoria,
+          descripcion_problema: problema
+        }).eq('id', editOTId);
+
+        if (error) return alert("Error al editar: " + error.message);
+        alert("¡Solicitud actualizada correctamente!");
+        cancelarEdicion();
+
+      } else {
+        const { data, error } = await _supabase.from('ordenes_trabajo').insert([{
+          cliente_id: clienteId,
+          sitio_id: sitioId,
+          categoria_problema: categoria,
+          descripcion_problema: problema,
+          fecha_inicio: new Date().toISOString()
+        }]).select();
+
+        if (error) return alert("Error al crear OT: " + error.message);
+        alert("¡Orden " + data[0].numero_correlativo + " registrada como pendiente!");
+        document.getElementById('input-problema').value = '';
+      }
+
+      actualizarContadorPendientes();
+    }
+
+    async function seleccionarOTParaCierre(otId) {
+      const { data } = await _supabase.from('ordenes_trabajo').select('*').eq('id', otId).single();
+      currentOT = data;
+
+      document.getElementById('ot-num-badge').innerText = currentOT.numero_correlativo;
+      document.querySelectorAll('.vista-seccion').forEach(el => el.classList.add('hidden'));
+      document.getElementById('cierre-card').classList.remove('hidden');
+    }
+
+    async function finalizarOrden() {
+      const tareas = document.getElementById('input-tareas').value;
+      const insumos = document.getElementById('input-insumos').value;
+      const firmante = document.getElementById('input-firmante').value;
+      const dni = document.getElementById('input-dni').value;
+
+      if (!tareas || !firmante || !dni) return alert("Completa las tareas y datos del receptor.");
+
+      const { error } = await _supabase.from('ordenes_trabajo').update({
+        estado: 'Completada',
+        fecha_fin: new Date().toISOString(),
+        tareas_realizadas: tareas,
+        insumos_utilizados: insumos,
+        nombre_firmante: firmante,
+        dni_firmante: dni
+      }).eq('id', currentOT.id);
+
+      if (error) return alert("Error al cerrar OT: " + error.message);
+
+      document.getElementById('cierre-card').classList.add('hidden');
+      document.getElementById('exito-card').classList.remove('hidden');
+      actualizarContadorPendientes();
+    }
+
+    async function guardarCliente() {
+      const name = document.getElementById('new-client-name').value.trim();
+      const cuit = document.getElementById('new-client-cuit').value.trim();
+      const email = document.getElementById('new-client-email').value.trim();
+      const phone = document.getElementById('new-client-phone').value.trim();
+
+      if (!name || !email) return alert("Ingresa Razón Social y Email.");
+
+      await _supabase.from('clientes').insert([{ razon_social: name, identificacion_fiscal: cuit, email_contacto: email, telefono: phone }]);
+      alert("¡Cliente guardado!");
+      document.getElementById('new-client-name').value = '';
+      document.getElementById('new-client-email').value = '';
+      await cargarClientes();
+    }
+
+    async function guardarSitio() {
+      const clienteId = document.getElementById('modal-select-cliente').value;
+      const name = document.getElementById('new-site-name').value.trim();
+      const address = document.getElementById('new-site-address').value.trim();
+
+      if (!clienteId || !name || !address) return alert("Completa cliente, sitio y dirección.");
+
+      await _supabase.from('sitios').insert([{ cliente_id: clienteId, nombre_sitio: name, direccion: address }]);
+      alert("¡Sitio guardado!");
+      document.getElementById('new-site-name').value = '';
+      document.getElementById('new-site-address').value = '';
+      cargarSitios();
+    }
+
+    function enviarWhatsApp() {
+      const msg = encodeURIComponent(`Hola, adjuntamos comprobante de la Orden ${currentOT.numero_correlativo} realizada por PNZ Tech. Estado: COMPLETADO ✔`);
+      window.open(`https://wa.me/?text=${msg}`, '_blank');
+    }
+
+    function nuevaCaptura() {
+      location.reload();
+    }
+
+    // Iniciar automáticamente al abrir el archivo
+    window.onload = iniciarApp;
+  </script>
+</body>
+</html>
