@@ -166,8 +166,8 @@
       <input type="text" id="new-client-cuit" placeholder="Ej: 30-12345678-9">
       <label>Email para Notificaciones *</label>
       <input type="email" id="new-client-email" placeholder="contacto@cliente.com">
-      <label>Teléfono de Contacto</label>
-      <input type="text" id="new-client-phone" placeholder="+54 9 11 1234-5678">
+      <label>Teléfono de Contacto (incluir ej: 54911...)</label>
+      <input type="text" id="new-client-phone" placeholder="Ej: 5491112345678">
       <button class="btn btn-success" onclick="guardarCliente()">GUARDAR CLIENTE</button>
       
       <hr style="margin:20px 0; border:0; border-top:1px solid #ccc;">
@@ -225,7 +225,7 @@
     const DEFAULT_URL = 'https://ebiqkyinlachaoyafyin.supabase.co'; 
     const DEFAULT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViaXFreWlubGFjaGFveWFmeWluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwMTc4MjksImV4cCI6MjEwMDU5MzgyOX0.OZ141ZXb_qKRlKmydYJHplqMc6s6cMFbrr4odHlpBoM';
 
-    let _supabase, clientList = [], currentOT = null, editOTId = null;
+    let _supabase, clientList = [], currentOT = null, editOTId = null, clienteTelefonoActual = "";
 
     function cambiarVista(idSeccion, idBtn) {
       document.querySelectorAll('.vista-seccion').forEach(el => el.classList.add('hidden'));
@@ -297,7 +297,6 @@
     }
 
     async function renderListaGestion() {
-      // Cargar Clientes en lista
       const divClientes = document.getElementById('lista-clientes-delete');
       divClientes.innerHTML = clientList.map(c => `
         <div class="list-item" style="flex-direction:column; align-items:flex-start; gap:8px;">
@@ -310,8 +309,8 @@
           </div>
           
           <div id="edit-form-${c.id}" class="hidden" style="width:100%; background:#f8f9fa; padding:10px; border-radius:6px; box-sizing:border-box;">
-            <label style="margin-top:0;">Teléfono de Contacto</label>
-            <input type="text" id="edit-phone-${c.id}" value="${c.telefono || ''}" placeholder="+54 9 11...">
+            <label style="margin-top:0;">Teléfono de Contacto (ej: 54911...)</label>
+            <input type="text" id="edit-phone-${c.id}" value="${c.telefono || ''}" placeholder="Ej: 5491112345678">
             <label>Email para Notificaciones</label>
             <input type="email" id="edit-email-${c.id}" value="${c.email_contacto || ''}">
             <button class="btn btn-success" style="padding:8px; font-size:0.85rem; margin-top:8px;" onclick="guardarEdicionCliente('${c.id}')">Guardar Cambios</button>
@@ -319,12 +318,11 @@
         </div>
       `).join('');
 
-      // Cargar Sitios en lista sin interrumpir la app si no hay RLS
       const divSitios = document.getElementById('lista-sitios-delete');
       const { data: sitios, error } = await _supabase.from('sitios').select('*');
       
       if (error || !sitios || sitios.length === 0) {
-        divSitios.innerHTML = '<p style="font-size:0.85rem; color:#7f8c8d;">No hay sitios registrados o falta desactivar RLS en Supabase.</p>';
+        divSitios.innerHTML = '<p style="font-size:0.85rem; color:#7f8c8d;">No hay sitios registrados.</p>';
         return;
       }
 
@@ -557,9 +555,33 @@
 
       if (error) return alert("Error al cerrar OT: " + error.message);
 
+      // Obtener el teléfono del cliente asociado a esta OT
+      const clienteAsociado = clientList.find(c => c.id === currentOT.cliente_id);
+      if (clienteAsociado && clienteAsociado.telefono) {
+        clienteTelefonoActual = clienteAsociado.telefono.replace(/[^0-9]/g, '');
+      } else {
+        clienteTelefonoActual = "";
+      }
+
       document.getElementById('cierre-card').classList.add('hidden');
       document.getElementById('exito-card').classList.remove('hidden');
       actualizarContadorPendientes();
+    }
+
+    function enviarWhatsApp() {
+      const numOT = currentOT ? currentOT.numero_correlativo : '';
+      const firmanteText = document.getElementById('input-firmante').value;
+      const tareasText = document.getElementById('input-tareas').value;
+
+      const mensajeText = `Hola, adjuntamos comprobante de la Orden *${numOT}* realizada por *PNZ Tech*.\n\n*Estado:* COMPLETADO ✔️\n*Tareas:* ${tareasText}\n*Recibió:* ${firmanteText}\n\n¡Muchas gracias por confiar en nosotros!`;
+
+      const msgEncoded = encodeURIComponent(mensajeText);
+
+      if (clienteTelefonoActual && clienteTelefonoActual.length >= 8) {
+        window.open(`https://wa.me/${clienteTelefonoActual}?text=${msgEncoded}`, '_blank');
+      } else {
+        window.open(`https://wa.me/?text=${msgEncoded}`, '_blank');
+      }
     }
 
     async function guardarCliente() {
@@ -574,6 +596,7 @@
       alert("¡Cliente guardado!");
       document.getElementById('new-client-name').value = '';
       document.getElementById('new-client-email').value = '';
+      document.getElementById('new-client-phone').value = '';
       await cargarClientes();
     }
 
@@ -589,11 +612,6 @@
       document.getElementById('new-site-name').value = '';
       document.getElementById('new-site-address').value = '';
       cargarSitios();
-    }
-
-    function enviarWhatsApp() {
-      const msg = encodeURIComponent(`Hola, adjuntamos comprobante de la Orden ${currentOT.numero_correlativo} realizada por PNZ Tech. Estado: COMPLETADO ✔`);
-      window.open(`https://wa.me/?text=${msg}`, '_blank');
     }
 
     function nuevaCaptura() {
