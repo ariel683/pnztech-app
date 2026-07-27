@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PNZ Tech - Órdenes de Trabajo</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <!-- Librería para generar PDFs reales -->
+  <!-- Librería de generación de PDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     :root { --primary: #2b5cb1; --accent: #e74c3c; --bg: #f4f6f7; --text: #1a252c; }
@@ -216,8 +216,8 @@
     <!-- ACCIONES POST-COMPROBANTE -->
     <div id="exito-card" class="card hidden">
       <h2 style="color: #27ae60;">🎉 ¡Orden Finalizada con Éxito!</h2>
-      <button class="btn btn-wa" onclick="compartirPDFWhatsApp()">📄 ENVIAR PDF ADJUNTO POR WHATSAPP</button>
-      <button class="btn btn-secondary" onclick="enviarTextoWhatsApp()">💬 Enviar Solo Texto por WhatsApp</button>
+      <button class="btn btn-wa" onclick="compartirPDFWhatsApp()">📄 ENVIAR PDF CON MEMBRETE POR WHATSAPP</button>
+      <button class="btn btn-secondary" onclick="enviarTextoWhatsApp()">💬 Enviar Resumen de Texto por WhatsApp</button>
       <button class="btn" style="background:#34495e;" onclick="nuevaCaptura()">➕ Crear Nueva Orden</button>
     </div>
 
@@ -558,7 +558,6 @@
 
       if (error) return alert("Error al cerrar OT: " + error.message);
 
-      // Guardar datos temporales en currentOT para el PDF
       currentOT.tareas_realizadas = tareas;
       currentOT.insumos_utilizados = insumos;
       currentOT.nombre_firmante = firmante;
@@ -577,7 +576,7 @@
       actualizarContadorPendientes();
     }
 
-    // 📄 GENERAR Y COMPARTIR PDF NATIVO EN EL CELULAR
+    // 📄 GENERAR PDF CON MEMBRETE Y LOGO PNZ TECH
     async function compartirPDFWhatsApp() {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
@@ -588,81 +587,119 @@
       const direccion = currentOT?.sitios?.direccion || '-';
       const fecha = new Date(currentOT.fecha_fin || Date.now()).toLocaleDateString('es-AR');
 
-      // Diseño del Documento PDF
-      doc.setFillColor(43, 92, 177); // Azul PNZ Tech
-      doc.rect(0, 0, 210, 30, 'F');
-      
+      // 1. Membrete Superior PNZ TECH (Fondo Azul Institucional)
+      doc.setFillColor(43, 92, 177); 
+      doc.rect(0, 0, 210, 36, 'F');
+
+      // Insignia / Logo Tipográfico PNZ TECH
+      doc.setFillColor(255, 255, 255);
+      doc.rect(14, 8, 20, 20, 'F');
+      doc.setTextColor(43, 92, 177);
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("PNZ", 16, 21);
+
+      // Texto de Membrete
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(20);
-      doc.setFont("helvetica", "bold");
-      doc.text("PNZ TECH - COMPROBANTE DE SERVICIO", 15, 20);
+      doc.setFontSize(18);
+      doc.text("PNZ TECH", 40, 18);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.text("Soluciones Tecnológicas & Servicios de Campo", 40, 25);
 
+      // 2. Encabezado de la Orden
       doc.setTextColor(40, 40, 40);
-      doc.setFontSize(12);
-      doc.text(`Número de Orden: ${otNum}`, 15, 45);
-      doc.text(`Fecha de Finalización: ${fecha}`, 15, 52);
-
-      doc.setDrawColor(200, 200, 200);
-      doc.line(15, 58, 195, 58);
-
+      doc.setFontSize(13);
       doc.setFont("helvetica", "bold");
-      doc.text("DATOS DEL CLIENTE", 15, 68);
-      doc.setFont("helvetica", "normal");
-      doc.text(`Cliente / Razón Social: ${clienteNombre}`, 15, 76);
-      doc.text(`Sitio / Sucursal: ${sitioNombre}`, 15, 83);
-      doc.text(`Dirección: ${direccion}`, 15, 90);
-
-      doc.setFont("helvetica", "bold");
-      doc.text("DETALLE DEL TRABAJO REALIZADO", 15, 105);
-      doc.setFont("helvetica", "normal");
-      doc.text(`Categoría: ${currentOT.categoria_problema || 'Servicio Técnico'}`, 15, 113);
+      doc.text(`COMPROBANTE DE SERVICIO: ${otNum}`, 14, 48);
       
-      doc.text("Tareas Efecutuadas:", 15, 123);
-      const tareasLines = doc.splitTextToSize(currentOT.tareas_realizadas || '-', 180);
-      doc.text(tareasLines, 15, 130);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Fecha: ${fecha}`, 150, 48);
 
-      let nextY = 130 + (tareasLines.length * 7) + 5;
+      doc.setDrawColor(210, 210, 210);
+      doc.line(14, 52, 196, 52);
+
+      // 3. Ficha del Cliente
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(43, 92, 177);
+      doc.text("DATOS DEL CLIENTE Y SITIO", 14, 62);
+
+      doc.setTextColor(50, 50, 50);
+      doc.setFont("helvetica", "normal");
+      doc.text(`• Razón Social: ${clienteNombre}`, 14, 70);
+      doc.text(`• Sitio / Sucursal: ${sitioNombre}`, 14, 77);
+      doc.text(`• Dirección: ${direccion}`, 14, 84);
+
+      // 4. Detalle de Trabajos
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(43, 92, 177);
+      doc.text("INFORME DE TRABAJO REALIZADO", 14, 98);
+
+      doc.setTextColor(50, 50, 50);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Categoría: ${currentOT.categoria_problema || 'Servicio Técnico'}`, 14, 106);
+      
+      doc.setFont("helvetica", "bold");
+      doc.text("Tareas Efectuadas:", 14, 115);
+      doc.setFont("helvetica", "normal");
+      
+      const tareasLines = doc.splitTextToSize(currentOT.tareas_realizadas || '-', 180);
+      doc.text(tareasLines, 14, 122);
+
+      let nextY = 122 + (tareasLines.length * 6) + 6;
 
       if (currentOT.insumos_utilizados) {
         doc.setFont("helvetica", "bold");
-        doc.text("Insumos Utilizados:", 15, nextY);
+        doc.text("Insumos Utilizados:", 14, nextY);
         doc.setFont("helvetica", "normal");
-        nextY += 7;
+        nextY += 6;
         const insumoLines = doc.splitTextToSize(currentOT.insumos_utilizados, 180);
-        doc.text(insumoLines, 15, nextY);
-        nextY += (insumoLines.length * 7) + 10;
+        doc.text(insumoLines, 14, nextY);
+        nextY += (insumoLines.length * 6) + 8;
       } else {
-        nextY += 10;
+        nextY += 8;
       }
 
-      doc.line(15, nextY, 195, nextY);
+      doc.line(14, nextY, 196, nextY);
       nextY += 12;
 
+      // 5. Firma de Conformidad
       doc.setFont("helvetica", "bold");
-      doc.text("CONFORMIDAD DEL CLIENTE", 15, nextY);
+      doc.setTextColor(43, 92, 177);
+      doc.text("CONFORMIDAD DE RECEPCIÓN", 14, nextY);
+      
+      doc.setTextColor(50, 50, 50);
       doc.setFont("helvetica", "normal");
-      doc.text(`Recibió Conforme: ${currentOT.nombre_firmante}`, 15, nextY + 8);
-      doc.text(`DNI / Identificación: ${currentOT.dni_firmante}`, 15, nextY + 15);
+      doc.text(`Recibió Conforme: ${currentOT.nombre_firmante}`, 14, nextY + 8);
+      doc.text(`DNI / Identificación: ${currentOT.dni_firmante}`, 14, nextY + 15);
 
-      // Generar el archivo Blob en memoria
+      // Generar el archivo en memoria
       const pdfBlob = doc.output('blob');
-      const file = new File([pdfBlob], `${otNum}_Comprobante_PNZTech.pdf`, { type: 'application/pdf' });
+      const fileName = `${otNum}_Comprobante_PNZTech.pdf`;
+      const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
 
-      // Verificar si el navegador soporta compartir archivos
+      // Subir copia a Supabase Storage para resguardo público
+      try {
+        await _supabase.storage.from('comprobantes').upload(fileName, file, { upsert: true });
+      } catch(e) {
+        console.log("Resguardo en nube no disponible:", e);
+      }
+
+      // Disparar menú compartir del dispositivo
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({
             files: [file],
             title: `Comprobante ${otNum} - PNZ Tech`,
-            text: `Adjuntamos el comprobante de servicio ${otNum} realizado por PNZ Tech.`
+            text: `Adjuntamos comprobante de servicio ${otNum} emitido por PNZ Tech.`
           });
         } catch (err) {
-          console.log("Compartir cancelado o no soportado");
+          console.log("Compartir cancelado");
         }
       } else {
-        // Si el navegador no permite compartir directo, lo descarga
-        doc.save(`${otNum}_Comprobante_PNZTech.pdf`);
-        alert("El PDF se descargó en tu teléfono. Podés adjuntarlo directamente en el chat de WhatsApp.");
+        doc.save(fileName);
+        alert("El PDF con membrete se descargó en tu teléfono para que lo adjuntes directamente.");
       }
     }
 
