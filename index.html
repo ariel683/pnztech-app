@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PNZ Tech - Órdenes de Trabajo</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <!-- Librería para generación de PDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     :root { --primary: #2b5cb1; --accent: #e74c3c; --bg: #f4f6f7; --text: #1a252c; }
@@ -75,7 +74,7 @@
       <button id="nav-pendientes" class="btn-nav" onclick="cambiarVista('seccion-pendientes', 'nav-pendientes'); mostrarPendientes();">⏳ Pendientes (<span id="count-pending">0</span>)</button>
       <button id="nav-reporte" class="btn-nav" onclick="cambiarVista('seccion-reporte', 'nav-reporte')">📊 Reporte Mensual</button>
       <button id="nav-cliente" class="btn-nav" onclick="cambiarVista('modal-cliente', 'nav-cliente')">➕ Cliente / Sitio</button>
-      <button id="nav-admin" class="btn-nav" style="grid-column: span 2;" onclick="cambiarVista('modal-gestion', 'nav-admin'); renderListaGestion();">⚙️ Administrar Clientes / Sitios</button>
+      <button id="nav-admin" class="btn-nav" style="grid-column: span 2;" onclick="cambiarVista('modal-gestion', 'nav-admin'); cargarAdminClientes();">⚙️ Administrar Clientes / Sitios</button>
     </div>
 
     <!-- SECCIÓN: NUEVA ORDEN DE TRABAJO -->
@@ -186,13 +185,17 @@
       <button class="btn btn-secondary" onclick="guardarSitio()">GUARDAR SITIO</button>
     </div>
 
-    <!-- SECCIÓN: GESTIÓN DE EDICIÓN Y ELIMINACIÓN -->
+    <!-- SECCIÓN: GESTIÓN DE EDICIÓN Y ELIMINACIÓN FILTRADA -->
     <div id="modal-gestion" class="card vista-seccion hidden">
-      <h2>⚙️ Editar / Eliminar Clientes</h2>
-      <div id="lista-clientes-delete"></div>
+      <h2>⚙️ Administrar Clientes y Sus Sitios</h2>
       
-      <h2 style="margin-top:20px;">🏢 Sitios Cargados</h2>
-      <div id="lista-sitios-delete"></div>
+      <label>Seleccionar Cliente a Gestionar</label>
+      <select id="admin-select-cliente" onchange="cargarAdminSitiosFiltrados()"></select>
+
+      <div id="detalle-cliente-seleccionado" style="margin-top:15px; background:#f8f9fa; padding:12px; border-radius:8px;"></div>
+      
+      <h2 style="margin-top:20px;">🏢 Sitios Pertenecientes a este Cliente</h2>
+      <div id="lista-sitios-filtrados"></div>
     </div>
 
     <!-- SECCIÓN: CIERRE DE ORDEN -->
@@ -312,46 +315,69 @@
       }
     }
 
-    async function renderListaGestion() {
-      const divClientes = document.getElementById('lista-clientes-delete');
-      divClientes.innerHTML = clientList.map(c => `
-        <div class="list-item" style="flex-direction:column; align-items:flex-start; gap:8px;">
-          <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-            <span><b>${c.razon_social}</b> <small style="color:#7f8c8d;">(${c.telefono || 'Sin Tel'})</small></span>
-            <div>
-              <button class="btn btn-warning" style="padding:4px 8px; font-size:0.8rem; width:auto; margin:0;" onclick="toggleEditCliente('${c.id}')">✏️ Editar</button>
-              <button class="btn btn-danger" style="padding:4px 8px; font-size:0.8rem; width:auto; margin:0;" onclick="eliminarCliente('${c.id}', '${c.razon_social}')">🗑️</button>
-            </div>
-          </div>
-          
-          <div id="edit-form-${c.id}" class="hidden" style="width:100%; background:#f8f9fa; padding:10px; border-radius:6px; box-sizing:border-box;">
-            <label style="margin-top:0;">Teléfono de Contacto (ej: 54911...)</label>
-            <input type="text" id="edit-phone-${c.id}" value="${c.telefono || ''}" placeholder="Ej: 5491112345678">
-            <label>Email para Notificaciones</label>
-            <input type="email" id="edit-email-${c.id}" value="${c.email_contacto || ''}">
-            <button class="btn btn-success" style="padding:8px; font-size:0.85rem; margin-top:8px;" onclick="guardarEdicionCliente('${c.id}')">Guardar Cambios</button>
-          </div>
-        </div>
-      `).join('');
-
-      const divSitios = document.getElementById('lista-sitios-delete');
-      const { data: sitios, error } = await _supabase.from('sitios').select('*');
-      
-      if (error || !sitios || sitios.length === 0) {
-        divSitios.innerHTML = '<p style="font-size:0.85rem; color:#7f8c8d;">No hay sitios registrados.</p>';
+    // ⚙️ GESTIÓN FILTRADA POR CLIENTE SELECCIONADO
+    async function cargarAdminClientes() {
+      const selAdmin = document.getElementById('admin-select-cliente');
+      if (clientList.length === 0) {
+        selAdmin.innerHTML = '<option value="">(Sin clientes)</option>';
+        document.getElementById('detalle-cliente-seleccionado').innerHTML = '';
+        document.getElementById('lista-sitios-filtrados').innerHTML = '';
         return;
       }
 
-      divSitios.innerHTML = sitios.map(s => {
-        const clienteAsociado = clientList.find(c => c.id === s.cliente_id);
-        const nombreCliente = clienteAsociado ? clienteAsociado.razon_social : 'S/C';
-        return `
-          <div class="list-item">
-            <span><b>${s.nombre_sitio}</b> (${nombreCliente})</span>
-            <button class="btn btn-danger" onclick="eliminarSitio('${s.id}', '${s.nombre_sitio}')">Eliminar</button>
+      selAdmin.innerHTML = clientList.map(c => `<option value="${c.id}">${c.razon_social}</option>`).join('');
+      cargarAdminSitiosFiltrados();
+    }
+
+    async function cargarAdminSitiosFiltrados() {
+      const clienteId = document.getElementById('admin-select-cliente').value;
+      const cliente = clientList.find(c => c.id === clienteId);
+      
+      const divDetalle = document.getElementById('detalle-cliente-seleccionado');
+      const divSitios = document.getElementById('lista-sitios-filtrados');
+
+      if (!cliente) {
+        divDetalle.innerHTML = '';
+        divSitios.innerHTML = '';
+        return;
+      }
+
+      // 1. Mostrar Ficha y Edición del Cliente Seleccionado
+      divDetalle.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <b>${cliente.razon_social}</b>
+          <div>
+            <button class="btn btn-warning" style="padding:4px 8px; font-size:0.8rem; width:auto; margin:0;" onclick="toggleEditCliente('${cliente.id}')">✏️ Editar Cliente</button>
+            <button class="btn btn-danger" style="padding:4px 8px; font-size:0.8rem; width:auto; margin:0;" onclick="eliminarCliente('${cliente.id}', '${cliente.razon_social}')">🗑️ Eliminar</button>
           </div>
-        `;
-      }).join('');
+        </div>
+        <div style="font-size:0.85rem; color:#555; margin-top:5px;">
+          📞 Teléfono: ${cliente.telefono || 'Sin registrar'}<br>
+          ✉️ Email: ${cliente.email_contacto || 'Sin registrar'}
+        </div>
+        <div id="edit-form-${cliente.id}" class="hidden" style="margin-top:10px; background:#fff; padding:10px; border-radius:6px; border:1px solid #cbd5e1;">
+          <label style="margin-top:0;">Teléfono de Contacto</label>
+          <input type="text" id="edit-phone-${cliente.id}" value="${cliente.telefono || ''}">
+          <label>Email para Notificaciones</label>
+          <input type="email" id="edit-email-${cliente.id}" value="${cliente.email_contacto || ''}">
+          <button class="btn btn-success" style="padding:8px; font-size:0.85rem; margin-top:8px;" onclick="guardarEdicionCliente('${cliente.id}')">Guardar Cambios</button>
+        </div>
+      `;
+
+      // 2. Cargar Sitios Exclusivos de este Cliente
+      const { data: sitios, error } = await _supabase.from('sitios').select('*').eq('cliente_id', clienteId);
+
+      if (error || !sitios || sitios.length === 0) {
+        divSitios.innerHTML = '<p style="font-size:0.85rem; color:#7f8c8d; margin-top:10px;">Este cliente no tiene sitios/sucursales asociadas.</p>';
+        return;
+      }
+
+      divSitios.innerHTML = sitios.map(s => `
+        <div class="list-item">
+          <span><b>${s.nombre_sitio}</b> (${s.direccion})</span>
+          <button class="btn btn-danger" onclick="eliminarSitio('${s.id}', '${s.nombre_sitio}')">Eliminar Sitio</button>
+        </div>
+      `).join('');
     }
 
     function toggleEditCliente(id) {
@@ -371,19 +397,20 @@
 
       alert("¡Datos del cliente actualizados!");
       await cargarClientes();
-      renderListaGestion();
+      cargarAdminClientes();
     }
 
     async function eliminarCliente(id, nombre) {
       if (!confirm(`¿Seguro que deseas eliminar al cliente "${nombre}"?`)) return;
       await _supabase.from('clientes').delete().eq('id', id);
-      cargarClientes();
+      await cargarClientes();
+      cargarAdminClientes();
     }
 
     async function eliminarSitio(id, nombre) {
       if (!confirm(`¿Seguro que deseas eliminar el sitio "${nombre}"?`)) return;
       await _supabase.from('sitios').delete().eq('id', id);
-      cargarClientes();
+      cargarAdminSitiosFiltrados();
     }
 
     async function actualizarContadorPendientes() {
@@ -599,33 +626,24 @@
       actualizarContadorPendientes();
     }
 
-    // 📄 DIBUJAR LOGO VECTORIAL PNZ TECH
-    function dibujarLogoPNZTech(doc, startX, startY) {
-      doc.setDrawColor(90, 160, 220);
-      doc.setLineWidth(0.8);
+    // 📄 DIBUJAR ENCABEZADO Y MARCA PNZ TECH
+    function dibujarEncabezadoPNZTech(doc) {
+      // Fondo Azul Corporativo
+      doc.setFillColor(43, 92, 177); 
+      doc.rect(0, 0, 210, 36, 'F');
 
-      doc.circle(startX + 4, startY + 4, 3.5);
-      doc.rect(startX + 2.5, startY + 3, 3, 2); 
-
-      doc.circle(startX + 6, startY + 12, 3.2);
-      doc.rect(startX + 4.5, startY + 11, 3, 2.2);
-
-      doc.circle(startX + 10, startY + 19, 3);
-      doc.circle(startX + 10, startY + 18, 0.8);
-
-      doc.circle(startX + 16, startY + 23, 2.8);
-      doc.rect(startX + 14.8, startY + 22.5, 2.4, 2);
-
-      doc.setTextColor(40, 80, 160);
+      // Marca Tipográfica PNZ Tech en Blanco
+      doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(26);
-      doc.text("PNZ", startX + 22, startY + 15);
-
       doc.setFontSize(22);
-      doc.text("Tech", startX + 32, startY + 25);
+      doc.text("PNZ TECH", 15, 20);
+
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.text("Soluciones Tecnológicas & Servicios de Campo", 15, 27);
     }
 
-    // 📄 GENERAR PDF CLIENTE (OMITE REPUESTOS Y TRASLADO)
+    // 📄 GENERAR PDF OFICIAL DEL CLIENTE
     async function compartirPDFWhatsApp() {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
@@ -637,85 +655,75 @@
       const fecha = new Date(currentOT.fecha_fin || Date.now()).toLocaleDateString('es-AR');
 
       // 1. DIBUJAR ENCABEZADO
-      dibujarLogoPNZTech(doc, 14, 10);
-
-      doc.setTextColor(120, 120, 120);
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "normal");
-      doc.text("PNZ TECH - Soluciones Tecnológicas", 196, 14, { align: 'right' });
-      doc.text("Servicios de Campo & Seguridad Electrónica", 196, 18, { align: 'right' });
-
-      doc.setDrawColor(40, 80, 160);
-      doc.setLineWidth(1);
-      doc.line(14, 40, 196, 40);
+      dibujarEncabezadoPNZTech(doc);
 
       // 2. Encabezado de la Orden
       doc.setTextColor(40, 40, 40);
       doc.setFontSize(13);
       doc.setFont("helvetica", "bold");
-      doc.text(`COMPROBANTE DE SERVICIO: ${otNum}`, 14, 50);
+      doc.text(`COMPROBANTE DE SERVICIO: ${otNum}`, 15, 48);
       
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
-      doc.text(`Fecha: ${fecha}`, 150, 50);
+      doc.text(`Fecha: ${fecha}`, 150, 48);
 
       doc.setDrawColor(220, 220, 220);
       doc.setLineWidth(0.3);
-      doc.line(14, 54, 196, 54);
+      doc.line(15, 52, 195, 52);
 
       // 3. Ficha del Cliente
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(40, 80, 160);
-      doc.text("DATOS DEL CLIENTE Y SITIO", 14, 64);
+      doc.setTextColor(43, 92, 177);
+      doc.text("DATOS DEL CLIENTE Y SITIO", 15, 62);
 
       doc.setTextColor(50, 50, 50);
       doc.setFont("helvetica", "normal");
-      doc.text(`• Razón Social: ${clienteNombre}`, 14, 72);
-      doc.text(`• Sitio / Sucursal: ${sitioNombre}`, 14, 79);
-      doc.text(`• Dirección: ${direccion}`, 14, 86);
+      doc.text(`• Razón Social: ${clienteNombre}`, 15, 70);
+      doc.text(`• Sitio / Sucursal: ${sitioNombre}`, 15, 77);
+      doc.text(`• Dirección: ${direccion}`, 15, 84);
 
-      // 4. Detalle de Trabajos
+      // 4. Detalle de Trabajos (Omitiendo repuestos/traslado)
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(40, 80, 160);
-      doc.text("INFORME DE TRABAJO REALIZADO", 14, 100);
+      doc.setTextColor(43, 92, 177);
+      doc.text("INFORME DE TRABAJO REALIZADO", 15, 98);
 
       doc.setTextColor(50, 50, 50);
       doc.setFont("helvetica", "normal");
-      doc.text(`Categoría: ${currentOT.categoria_problema || 'Servicio Técnico'}`, 14, 108);
+      doc.text(`Categoría: ${currentOT.categoria_problema || 'Servicio Técnico'}`, 15, 106);
       
       doc.setFont("helvetica", "bold");
-      doc.text("Tareas Efectuadas:", 14, 117);
+      doc.text("Tareas Efectuadas:", 15, 115);
       doc.setFont("helvetica", "normal");
       
       const tareasLines = doc.splitTextToSize(currentOT.tareas_realizadas || '-', 180);
-      doc.text(tareasLines, 14, 124);
+      doc.text(tareasLines, 15, 122);
 
-      let nextY = 124 + (tareasLines.length * 6) + 6;
+      let nextY = 122 + (tareasLines.length * 6) + 6;
 
       if (currentOT.insumos_utilizados) {
         doc.setFont("helvetica", "bold");
-        doc.text("Insumos Utilizados:", 14, nextY);
+        doc.text("Insumos Utilizados:", 15, nextY);
         doc.setFont("helvetica", "normal");
         nextY += 6;
         const insumoLines = doc.splitTextToSize(currentOT.insumos_utilizados, 180);
-        doc.text(insumoLines, 14, nextY);
+        doc.text(insumoLines, 15, nextY);
         nextY += (insumoLines.length * 6) + 8;
       } else {
         nextY += 8;
       }
 
-      doc.line(14, nextY, 196, nextY);
+      doc.line(15, nextY, 195, nextY);
       nextY += 12;
 
       // 5. Firma de Conformidad
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(40, 80, 160);
-      doc.text("CONFORMIDAD DE RECEPCIÓN", 14, nextY);
+      doc.setTextColor(43, 92, 177);
+      doc.text("CONFORMIDAD DE RECEPCIÓN", 15, nextY);
       
       doc.setTextColor(50, 50, 50);
       doc.setFont("helvetica", "normal");
-      doc.text(`Recibió Conforme: ${currentOT.nombre_firmante}`, 14, nextY + 8);
-      doc.text(`DNI / Identificación: ${currentOT.dni_firmante}`, 14, nextY + 15);
+      doc.text(`Recibió Conforme: ${currentOT.nombre_firmante}`, 15, nextY + 8);
+      doc.text(`DNI / Identificación: ${currentOT.dni_firmante}`, 15, nextY + 15);
 
       const fileName = `${otNum}_Comprobante_PNZTech.pdf`;
       const pdfBlob = doc.output('blob');
@@ -744,7 +752,7 @@
           ? `https://web.whatsapp.com/send?phone=${clienteTelefonoActual}&text=${msgEncoded}`
           : `https://web.whatsapp.com/send?text=${msgEncoded}`;
 
-        alert("1. El PDF con el logo original de PNZ Tech se ha descargado en tu Computadora.\n2. Se abrirá WhatsApp Web a continuación para que adjuntes el archivo descargado.");
+        alert("1. El PDF de PNZ Tech se ha descargado en tu Computadora.\n2. Se abrirá WhatsApp Web a continuación para que adjuntes el archivo descargado.");
         window.open(waUrl, '_blank');
       }
     }
