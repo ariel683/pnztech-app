@@ -19,10 +19,10 @@
       background: #ffffff; 
       color: var(--primary); 
       border: 2px solid var(--primary); 
-      padding: 12px 8px; 
+      padding: 10px 6px; 
       border-radius: 8px; 
       font-weight: bold; 
-      font-size: 0.85rem; 
+      font-size: 0.8rem; 
       cursor: pointer; 
       text-align: center;
       transition: all 0.2s ease;
@@ -50,6 +50,11 @@
     .ot-card-pending { border-left: 4px solid #f1c40f; padding: 12px; background: #fff; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
     .action-row { display: flex; gap: 8px; margin-top: 10px; }
     .action-row button { flex: 1; padding: 8px; font-size: 0.85rem; }
+
+    .report-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.85rem; }
+    .report-table th, .report-table td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; }
+    .report-table th { background: #f1f5f9; color: var(--primary); }
+    .summary-box { background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 8px; padding: 12px; margin-top: 15px; font-size: 0.9rem; }
   </style>
 </head>
 <body>
@@ -65,8 +70,9 @@
     <div class="nav-grid">
       <button id="nav-nueva" class="btn-nav active" onclick="cambiarVista('seccion-nueva-ot', 'nav-nueva')">📋 Nueva OT</button>
       <button id="nav-pendientes" class="btn-nav" onclick="cambiarVista('seccion-pendientes', 'nav-pendientes'); mostrarPendientes();">⏳ Pendientes (<span id="count-pending">0</span>)</button>
+      <button id="nav-reporte" class="btn-nav" onclick="cambiarVista('seccion-reporte', 'nav-reporte')">📊 Reporte Mensual</button>
       <button id="nav-cliente" class="btn-nav" onclick="cambiarVista('modal-cliente', 'nav-cliente')">➕ Cliente / Sitio</button>
-      <button id="nav-admin" class="btn-nav" onclick="cambiarVista('modal-gestion', 'nav-admin')">🗑️ Administrar</button>
+      <button id="nav-admin" class="btn-nav" style="grid-column: span 2;" onclick="cambiarVista('modal-gestion', 'nav-admin'); renderListaGestion();">⚙️ Administrar Clientes</button>
     </div>
 
     <!-- SECCIÓN: NUEVA ORDEN DE TRABAJO -->
@@ -100,6 +106,57 @@
       <div id="container-pendientes">Cargando pendientes...</div>
     </div>
 
+    <!-- SECCIÓN: REPORTE MENSUAL PARA FACTURACIÓN -->
+    <div id="seccion-reporte" class="card vista-seccion hidden">
+      <h2>📊 Consolidado Mensual de Servicios</h2>
+      
+      <label>Seleccionar Cliente</label>
+      <select id="reporte-select-cliente"></select>
+
+      <div style="display:flex; gap:10px;">
+        <div style="flex:1;">
+          <label>Mes</label>
+          <select id="reporte-mes">
+            <option value="01">Enero</option>
+            <option value="02">Febrero</option>
+            <option value="03">Marzo</option>
+            <option value="04">Abril</option>
+            <option value="05">Mayo</option>
+            <option value="06">Junio</option>
+            <option value="07">Julio</option>
+            <option value="08">Agosto</option>
+            <option value="09">Septiembre</option>
+            <option value="10">Octubre</option>
+            <option value="11">Noviembre</option>
+            <option value="12">Diciembre</option>
+          </select>
+        </div>
+        <div style="flex:1;">
+          <label>Año</label>
+          <input type="number" id="reporte-anio" value="2026">
+        </div>
+      </div>
+
+      <button class="btn" onclick="generarReporteMensual()">🔎 GENERAR INFORME</button>
+
+      <div id="resultado-reporte" class="hidden">
+        <div id="resumen-box" class="summary-box"></div>
+        <div style="overflow-x:auto;">
+          <table class="report-table">
+            <thead>
+              <tr>
+                <th>OT</th>
+                <th>Fecha</th>
+                <th>Sitio</th>
+                <th>Tareas / Insumos</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-reporte-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- SECCIÓN: AGREGAR CLIENTE O SITIO -->
     <div id="modal-cliente" class="card vista-seccion hidden" style="border:2px solid var(--primary);">
       <h2>➕ Dar de Alta Cliente / Sitio</h2>
@@ -125,13 +182,12 @@
       <button class="btn btn-secondary" onclick="guardarSitio()">GUARDAR SITIO</button>
     </div>
 
-    <!-- SECCIÓN: GESTIÓN DE ELIMINACIÓN -->
+    <!-- SECCIÓN: GESTIÓN DE EDICIÓN Y ELIMINACIÓN -->
     <div id="modal-gestion" class="card vista-seccion hidden">
-      <h2>🗑️ Eliminar Clientes y Sitios</h2>
-      <label>Clientes Cargados</label>
+      <h2>⚙️ Editar / Eliminar Clientes</h2>
       <div id="lista-clientes-delete"></div>
       
-      <label style="margin-top:20px;">Sitios Cargados</label>
+      <h2 style="margin-top:20px;">🏢 Sitios Cargados</h2>
       <div id="lista-sitios-delete"></div>
     </div>
 
@@ -165,9 +221,9 @@
   </div>
 
   <script>
-    // ⚙️ PEGA AQUÍ TUS CLAVES DE SUPABASE PARA AUTOCONEXIÓN PERMANENTE:
-    const DEFAULT_URL = 'https://ebiqkyinlachaoyafyin.supabase.co'; 
-    const DEFAULT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViaXFreWlubGFjaGFveWFmeWluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwMTc4MjksImV4cCI6MjEwMDU5MzgyOX0.OZ141ZXb_qKRlKmydYJHplqMc6s6cMFbrr4odHlpBoM';
+    // ⚙️ INGRESA TUS CLAVES DE SUPABASE AQUÍ
+    const DEFAULT_URL = 'https://TU-PROYECTO.supabase.co'; 
+    const DEFAULT_KEY = 'TU-ANON-KEY-AQUI';
 
     let _supabase, clientList = [], currentOT = null, editOTId = null;
 
@@ -184,8 +240,11 @@
         _supabase = window.supabase.createClient(DEFAULT_URL, DEFAULT_KEY);
         await cargarClientes();
         await actualizarContadorPendientes();
+        
+        const mesActual = String(new Date().getMonth() + 1).padStart(2, '0');
+        document.getElementById('reporte-mes').value = mesActual;
       } catch (err) {
-        alert("Error al conectar con Supabase. Verifica que pegaste bien la URL y Key en el archivo index.html.");
+        alert("Error al conectar con Supabase. Verifica tus llaves en index.html.");
       }
     }
 
@@ -196,18 +255,19 @@
       clientList = clientes || [];
       const selMain = document.getElementById('select-cliente');
       const selModal = document.getElementById('modal-select-cliente');
+      const selReporte = document.getElementById('reporte-select-cliente');
 
       if (clientList.length === 0) {
         selMain.innerHTML = '<option value="">(Sin clientes cargados)</option>';
         selModal.innerHTML = '<option value="">(Sin clientes)</option>';
+        selReporte.innerHTML = '<option value="">(Sin clientes)</option>';
       } else {
         const optionsHtml = clientList.map(c => `<option value="${c.id}">${c.razon_social}</option>`).join('');
         selMain.innerHTML = optionsHtml;
         selModal.innerHTML = optionsHtml;
+        selReporte.innerHTML = optionsHtml;
         cargarSitios();
       }
-
-      renderListaGestion();
     }
 
     async function cargarSitios() {
@@ -231,9 +291,22 @@
     async function renderListaGestion() {
       const divClientes = document.getElementById('lista-clientes-delete');
       divClientes.innerHTML = clientList.map(c => `
-        <div class="list-item">
-          <span><b>${c.razon_social}</b></span>
-          <button class="btn btn-danger" onclick="eliminarCliente('${c.id}', '${c.razon_social}')">Eliminar</button>
+        <div class="list-item" style="flex-direction:column; align-items:flex-start; gap:8px;">
+          <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+            <span><b>${c.razon_social}</b> <small style="color:#7f8c8d;">(${c.telefono || 'Sin Tel'})</small></span>
+            <div>
+              <button class="btn btn-warning" style="padding:4px 8px; font-size:0.8rem; width:auto; margin:0;" onclick="toggleEditCliente('${c.id}')">✏️ Editar</button>
+              <button class="btn btn-danger" style="padding:4px 8px; font-size:0.8rem; width:auto; margin:0;" onclick="eliminarCliente('${c.id}', '${c.razon_social}')">🗑️</button>
+            </div>
+          </div>
+          
+          <div id="edit-form-${c.id}" class="hidden" style="width:100%; background:#f8f9fa; padding:10px; border-radius:6px; box-sizing:border-box;">
+            <label style="margin-top:0;">Teléfono de Contacto</label>
+            <input type="text" id="edit-phone-${c.id}" value="${c.telefono || ''}" placeholder="+54 9 11...">
+            <label>Email para Notificaciones</label>
+            <input type="email" id="edit-email-${c.id}" value="${c.email_contacto || ''}">
+            <button class="btn btn-success" style="padding:8px; font-size:0.85rem; margin-top:8px;" onclick="guardarEdicionCliente('${c.id}')">Guardar Cambios</button>
+          </div>
         </div>
       `).join('');
 
@@ -245,6 +318,26 @@
           <button class="btn btn-danger" onclick="eliminarSitio('${s.id}', '${s.nombre_sitio}')">Eliminar</button>
         </div>
       `).join('');
+    }
+
+    function toggleEditCliente(id) {
+      document.getElementById(`edit-form-${id}`).classList.toggle('hidden');
+    }
+
+    async function guardarEdicionCliente(id) {
+      const nuevoTelefono = document.getElementById(`edit-phone-${id}`).value.trim();
+      const nuevoEmail = document.getElementById(`edit-email-${id}`).value.trim();
+
+      const { error } = await _supabase.from('clientes').update({
+        telefono: nuevoTelefono,
+        email_contacto: nuevoEmail
+      }).eq('id', id);
+
+      if (error) return alert("Error al actualizar: " + error.message);
+
+      alert("¡Datos del cliente actualizados!");
+      await cargarClientes();
+      renderListaGestion();
     }
 
     async function eliminarCliente(id, nombre) {
@@ -296,6 +389,61 @@
       `).join('');
     }
 
+    async function generarReporteMensual() {
+      const clienteId = document.getElementById('reporte-select-cliente').value;
+      const mes = document.getElementById('reporte-mes').value;
+      const anio = document.getElementById('reporte-anio').value;
+
+      if (!clienteId) return alert("Selecciona un cliente.");
+
+      const fechaInicio = `${anio}-${mes}-01T00:00:00`;
+      const fechaFin = `${anio}-${mes}-31T23:59:59`;
+
+      const { data: ordenes, error } = await _supabase
+        .from('ordenes_trabajo')
+        .select('*, sitios(nombre_sitio, direccion)')
+        .eq('cliente_id', clienteId)
+        .eq('estado', 'Completada')
+        .gte('fecha_fin', fechaInicio)
+        .lte('fecha_fin', fechaFin)
+        .order('fecha_fin', { ascending: true });
+
+      if (error) return alert("Error al consultar reporte: " + error.message);
+
+      const resBox = document.getElementById('resumen-box');
+      const tableBody = document.getElementById('tabla-reporte-body');
+      const divRes = document.getElementById('resultado-reporte');
+
+      if (!ordenes || ordenes.length === 0) {
+        resBox.innerHTML = `<b>Sin Registros:</b> No hay órdenes completadas para este cliente en el período ${mes}/${anio}.`;
+        tableBody.innerHTML = '';
+        divRes.classList.remove('hidden');
+        return;
+      }
+
+      resBox.innerHTML = `
+        <b>📌 Resumen del Período (${mes}/${anio}):</b><br>
+        • Total de Servicios Realizados: <b>${ordenes.length} órdenes</b>
+      `;
+
+      tableBody.innerHTML = ordenes.map(ot => {
+        const fechaFmt = new Date(ot.fecha_fin).toLocaleDateString('es-AR');
+        return `
+          <tr>
+            <td><b>${ot.numero_correlativo}</b></td>
+            <td>${fechaFmt}</td>
+            <td>${ot.sitios?.nombre_sitio || 'N/A'}</td>
+            <td>
+              <b>Tareas:</b> ${ot.tareas_realizadas}<br>
+              ${ot.insumos_utilizados ? `<b>Insumos:</b> ${ot.insumos_utilizados}` : ''}
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      divRes.classList.remove('hidden');
+    }
+
     async function editarSolicitud(otId) {
       const { data: ot } = await _supabase.from('ordenes_trabajo').select('*').eq('id', otId).single();
       if (!ot) return;
@@ -339,7 +487,7 @@
         }).eq('id', editOTId);
 
         if (error) return alert("Error al editar: " + error.message);
-        alert("¡Solicitud actualizada correctamente!");
+        alert("¡Solicitud actualizada!");
         cancelarEdicion();
 
       } else {
@@ -352,7 +500,7 @@
         }]).select();
 
         if (error) return alert("Error al crear OT: " + error.message);
-        alert("¡Orden " + data[0].numero_correlativo + " registrada como pendiente!");
+        alert("¡Orden " + data[0].numero_correlativo + " registrada!");
         document.getElementById('input-problema').value = '';
       }
 
@@ -430,7 +578,6 @@
       location.reload();
     }
 
-    // Iniciar automáticamente al abrir el archivo
     window.onload = iniciarApp;
   </script>
 </body>
