@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PNZ Tech - Órdenes de Trabajo</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <!-- Librería de generación de PDF -->
+  <!-- Librería para generación de PDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     :root { --primary: #2b5cb1; --accent: #e74c3c; --bg: #f4f6f7; --text: #1a252c; }
@@ -216,7 +216,7 @@
     <!-- ACCIONES POST-COMPROBANTE -->
     <div id="exito-card" class="card hidden">
       <h2 style="color: #27ae60;">🎉 ¡Orden Finalizada con Éxito!</h2>
-      <button class="btn btn-wa" onclick="compartirPDFWhatsApp()">📄 ENVIAR PDF CON MEMBRETE POR WHATSAPP</button>
+      <button class="btn btn-wa" onclick="compartirPDFWhatsApp()">📄 ENVIAR PDF OFICIAL PNZ TECH POR WHATSAPP</button>
       <button class="btn btn-secondary" onclick="enviarTextoWhatsApp()">💬 Enviar Solo Resumen de Texto por WhatsApp</button>
       <button class="btn" style="background:#34495e;" onclick="nuevaCaptura()">➕ Crear Nueva Orden</button>
     </div>
@@ -576,7 +576,40 @@
       actualizarContadorPendientes();
     }
 
-    // 📄 GENERAR PDF CON MEMBRETE Y COMPARTIR/ABRIR WHATSAPP
+    // 📄 DIBUJAR LOGO VECTORIAL IDÉNTICO PNZ TECH
+    function dibujarLogoPNZTech(doc, startX, startY) {
+      // 1. Íconos circulares celestes
+      doc.setDrawColor(90, 160, 220);
+      doc.setLineWidth(0.8);
+
+      // Círculo 1: CCTV
+      doc.circle(startX + 4, startY + 4, 3.5);
+      doc.rect(startX + 2.5, startY + 3, 3, 2); 
+
+      // Círculo 2: Maletín
+      doc.circle(startX + 6, startY + 12, 3.2);
+      doc.rect(startX + 4.5, startY + 11, 3, 2.2);
+
+      // Círculo 3: Usuario
+      doc.circle(startX + 10, startY + 19, 3);
+      doc.circle(startX + 10, startY + 18, 0.8);
+
+      // Círculo 4: Candado
+      doc.circle(startX + 16, startY + 23, 2.8);
+      doc.rect(startX + 14.8, startY + 22.5, 2.4, 2);
+
+      // 2. Texto "PNZ" en azul oscuro corporativo
+      doc.setTextColor(40, 80, 160);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(26);
+      doc.text("PNZ", startX + 22, startY + 15);
+
+      // 3. Texto "Tech" abajo
+      doc.setFontSize(22);
+      doc.text("Tech", startX + 32, startY + 25);
+    }
+
+    // 📄 GENERAR PDF Y COMPARTIR/ABRIR WHATSAPP
     async function compartirPDFWhatsApp() {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
@@ -587,67 +620,63 @@
       const direccion = currentOT?.sitios?.direccion || '-';
       const fecha = new Date(currentOT.fecha_fin || Date.now()).toLocaleDateString('es-AR');
 
-      // 1. Membrete Superior PNZ TECH
-      doc.setFillColor(43, 92, 177); 
-      doc.rect(0, 0, 210, 36, 'F');
+      // 1. DIBUJAR ENCABEZADO OFICIAL CON LOGO PNZ TECH
+      dibujarLogoPNZTech(doc, 14, 10);
 
-      // Logo PNZ
-      doc.setFillColor(255, 255, 255);
-      doc.rect(14, 8, 20, 20, 'F');
-      doc.setTextColor(43, 92, 177);
-      doc.setFontSize(11);
-      doc.setFont("helvetica", "bold");
-      doc.text("PNZ", 16, 21);
-
-      // Texto de Membrete
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(18);
-      doc.text("PNZ TECH", 40, 18);
-      doc.setFontSize(9);
+      // Datos de contacto institucional en la esquina superior derecha
+      doc.setTextColor(120, 120, 120);
+      doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
-      doc.text("Soluciones Tecnológicas & Servicios de Campo", 40, 25);
+      doc.text("PNZ TECH - Soluciones Tecnológicas", 196, 14, { align: 'right' });
+      doc.text("Servicios de Campo & Seguridad Electrónica", 196, 18, { align: 'right' });
+
+      // Línea divisora
+      doc.setDrawColor(40, 80, 160);
+      doc.setLineWidth(1);
+      doc.line(14, 40, 196, 40);
 
       // 2. Encabezado de la Orden
       doc.setTextColor(40, 40, 40);
       doc.setFontSize(13);
       doc.setFont("helvetica", "bold");
-      doc.text(`COMPROBANTE DE SERVICIO: ${otNum}`, 14, 48);
+      doc.text(`COMPROBANTE DE SERVICIO: ${otNum}`, 14, 50);
       
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
-      doc.text(`Fecha: ${fecha}`, 150, 48);
+      doc.text(`Fecha: ${fecha}`, 150, 50);
 
-      doc.setDrawColor(210, 210, 210);
-      doc.line(14, 52, 196, 52);
+      doc.setDrawColor(220, 220, 220);
+      doc.setLineWidth(0.3);
+      doc.line(14, 54, 196, 54);
 
       // 3. Ficha del Cliente
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(43, 92, 177);
-      doc.text("DATOS DEL CLIENTE Y SITIO", 14, 62);
+      doc.setTextColor(40, 80, 160);
+      doc.text("DATOS DEL CLIENTE Y SITIO", 14, 64);
 
       doc.setTextColor(50, 50, 50);
       doc.setFont("helvetica", "normal");
-      doc.text(`• Razón Social: ${clienteNombre}`, 14, 70);
-      doc.text(`• Sitio / Sucursal: ${sitioNombre}`, 14, 77);
-      doc.text(`• Dirección: ${direccion}`, 14, 84);
+      doc.text(`• Razón Social: ${clienteNombre}`, 14, 72);
+      doc.text(`• Sitio / Sucursal: ${sitioNombre}`, 14, 79);
+      doc.text(`• Dirección: ${direccion}`, 14, 86);
 
       // 4. Detalle de Trabajos
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(43, 92, 177);
-      doc.text("INFORME DE TRABAJO REALIZADO", 14, 98);
+      doc.setTextColor(40, 80, 160);
+      doc.text("INFORME DE TRABAJO REALIZADO", 14, 100);
 
       doc.setTextColor(50, 50, 50);
       doc.setFont("helvetica", "normal");
-      doc.text(`Categoría: ${currentOT.categoria_problema || 'Servicio Técnico'}`, 14, 106);
+      doc.text(`Categoría: ${currentOT.categoria_problema || 'Servicio Técnico'}`, 14, 108);
       
       doc.setFont("helvetica", "bold");
-      doc.text("Tareas Efectuadas:", 14, 115);
+      doc.text("Tareas Efectuadas:", 14, 117);
       doc.setFont("helvetica", "normal");
       
       const tareasLines = doc.splitTextToSize(currentOT.tareas_realizadas || '-', 180);
-      doc.text(tareasLines, 14, 122);
+      doc.text(tareasLines, 14, 124);
 
-      let nextY = 122 + (tareasLines.length * 6) + 6;
+      let nextY = 124 + (tareasLines.length * 6) + 6;
 
       if (currentOT.insumos_utilizados) {
         doc.setFont("helvetica", "bold");
@@ -666,7 +695,7 @@
 
       // 5. Firma de Conformidad
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(43, 92, 177);
+      doc.setTextColor(40, 80, 160);
       doc.text("CONFORMIDAD DE RECEPCIÓN", 14, nextY);
       
       doc.setTextColor(50, 50, 50);
@@ -680,7 +709,6 @@
 
       // LÓGICA MÓVIL VS COMPUTADORA:
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        // Dispositivo Móvil con menú de archivos habilitado
         try {
           await navigator.share({
             files: [file],
@@ -691,7 +719,6 @@
           console.log("Compartir cancelado");
         }
       } else {
-        // Computadora / Escritorio: Descarga el PDF y abre WhatsApp Web
         doc.save(fileName);
         
         const firmanteText = document.getElementById('input-firmante').value;
@@ -703,7 +730,7 @@
           ? `https://web.whatsapp.com/send?phone=${clienteTelefonoActual}&text=${msgEncoded}`
           : `https://web.whatsapp.com/send?text=${msgEncoded}`;
 
-        alert("1. El PDF con membrete se ha descargado en tu Computadora.\n2. Se abrirá WhatsApp Web a continuación para que adjuntes el archivo descargado.");
+        alert("1. El PDF con el logo original de PNZ Tech se ha descargado en tu Computadora.\n2. Se abrirá WhatsApp Web a continuación para que adjuntes el archivo descargado.");
         window.open(waUrl, '_blank');
       }
     }
