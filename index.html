@@ -217,7 +217,7 @@
     <div id="exito-card" class="card hidden">
       <h2 style="color: #27ae60;">🎉 ¡Orden Finalizada con Éxito!</h2>
       <button class="btn btn-wa" onclick="compartirPDFWhatsApp()">📄 ENVIAR PDF CON MEMBRETE POR WHATSAPP</button>
-      <button class="btn btn-secondary" onclick="enviarTextoWhatsApp()">💬 Enviar Resumen de Texto por WhatsApp</button>
+      <button class="btn btn-secondary" onclick="enviarTextoWhatsApp()">💬 Enviar Solo Resumen de Texto por WhatsApp</button>
       <button class="btn" style="background:#34495e;" onclick="nuevaCaptura()">➕ Crear Nueva Orden</button>
     </div>
 
@@ -576,7 +576,7 @@
       actualizarContadorPendientes();
     }
 
-    // 📄 GENERAR PDF CON MEMBRETE Y LOGO PNZ TECH
+    // 📄 GENERAR PDF CON MEMBRETE Y COMPARTIR/ABRIR WHATSAPP
     async function compartirPDFWhatsApp() {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
@@ -587,11 +587,11 @@
       const direccion = currentOT?.sitios?.direccion || '-';
       const fecha = new Date(currentOT.fecha_fin || Date.now()).toLocaleDateString('es-AR');
 
-      // 1. Membrete Superior PNZ TECH (Fondo Azul Institucional)
+      // 1. Membrete Superior PNZ TECH
       doc.setFillColor(43, 92, 177); 
       doc.rect(0, 0, 210, 36, 'F');
 
-      // Insignia / Logo Tipográfico PNZ TECH
+      // Logo PNZ
       doc.setFillColor(255, 255, 255);
       doc.rect(14, 8, 20, 20, 'F');
       doc.setTextColor(43, 92, 177);
@@ -674,20 +674,13 @@
       doc.text(`Recibió Conforme: ${currentOT.nombre_firmante}`, 14, nextY + 8);
       doc.text(`DNI / Identificación: ${currentOT.dni_firmante}`, 14, nextY + 15);
 
-      // Generar el archivo en memoria
-      const pdfBlob = doc.output('blob');
       const fileName = `${otNum}_Comprobante_PNZTech.pdf`;
+      const pdfBlob = doc.output('blob');
       const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
 
-      // Subir copia a Supabase Storage para resguardo público
-      try {
-        await _supabase.storage.from('comprobantes').upload(fileName, file, { upsert: true });
-      } catch(e) {
-        console.log("Resguardo en nube no disponible:", e);
-      }
-
-      // Disparar menú compartir del dispositivo
+      // LÓGICA MÓVIL VS COMPUTADORA:
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        // Dispositivo Móvil con menú de archivos habilitado
         try {
           await navigator.share({
             files: [file],
@@ -698,8 +691,20 @@
           console.log("Compartir cancelado");
         }
       } else {
+        // Computadora / Escritorio: Descarga el PDF y abre WhatsApp Web
         doc.save(fileName);
-        alert("El PDF con membrete se descargó en tu teléfono para que lo adjuntes directamente.");
+        
+        const firmanteText = document.getElementById('input-firmante').value;
+        const tareasText = document.getElementById('input-tareas').value;
+        const mensajeText = `Hola, adjuntamos comprobante de la Orden *${otNum}* realizada por *PNZ Tech*.\n\n*Estado:* COMPLETADO ✔️\n*Tareas:* ${tareasText}\n*Recibió:* ${firmanteText}\n\n¡Muchas gracias por confiar en nosotros!`;
+        const msgEncoded = encodeURIComponent(mensajeText);
+
+        const waUrl = (clienteTelefonoActual && clienteTelefonoActual.length >= 8)
+          ? `https://web.whatsapp.com/send?phone=${clienteTelefonoActual}&text=${msgEncoded}`
+          : `https://web.whatsapp.com/send?text=${msgEncoded}`;
+
+        alert("1. El PDF con membrete se ha descargado en tu Computadora.\n2. Se abrirá WhatsApp Web a continuación para que adjuntes el archivo descargado.");
+        window.open(waUrl, '_blank');
       }
     }
 
@@ -713,9 +718,9 @@
       const msgEncoded = encodeURIComponent(mensajeText);
 
       if (clienteTelefonoActual && clienteTelefonoActual.length >= 8) {
-        window.open(`https://wa.me/${clienteTelefonoActual}?text=${msgEncoded}`, '_blank');
+        window.open(`https://web.whatsapp.com/send?phone=${clienteTelefonoActual}&text=${msgEncoded}`, '_blank');
       } else {
-        window.open(`https://wa.me/?text=${msgEncoded}`, '_blank');
+        window.open(`https://web.whatsapp.com/send?text=${msgEncoded}`, '_blank');
       }
     }
 
