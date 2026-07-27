@@ -221,7 +221,7 @@
   </div>
 
   <script>
-    // ⚙️ CREDENCIALES OFICIALES DE SUPABASE PNZ TECH:
+    // CREDENCIALES OFICIALES DE SUPABASE PNZ TECH:
     const DEFAULT_URL = 'https://ebiqkyinlachaoyafyin.supabase.co'; 
     const DEFAULT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViaXFreWlubGFjaGFveWFmeWluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwMTc4MjksImV4cCI6MjEwMDU5MzgyOX0.OZ141ZXb_qKRlKmydYJHplqMc6s6cMFbrr4odHlpBoM';
 
@@ -244,98 +244,100 @@
         const mesActual = String(new Date().getMonth() + 1).padStart(2, '0');
         document.getElementById('reporte-mes').value = mesActual;
       } catch (err) {
-        alert("Error al conectar con Supabase: " + err.message);
+        console.error("Error inicial:", err);
       }
     }
 
     async function cargarClientes() {
-      const { data: clientes, error } = await _supabase.from('clientes').select('*').order('razon_social', { ascending: true });
-      if (error) throw error;
+      try {
+        const { data: clientes, error } = await _supabase.from('clientes').select('*').order('razon_social', { ascending: true });
+        if (error) throw error;
 
-      clientList = clientes || [];
-      const selMain = document.getElementById('select-cliente');
-      const selModal = document.getElementById('modal-select-cliente');
-      const selReporte = document.getElementById('reporte-select-cliente');
+        clientList = clientes || [];
+        const selMain = document.getElementById('select-cliente');
+        const selModal = document.getElementById('modal-select-cliente');
+        const selReporte = document.getElementById('reporte-select-cliente');
 
-      if (clientList.length === 0) {
-        selMain.innerHTML = '<option value="">(Sin clientes cargados)</option>';
-        selModal.innerHTML = '<option value="">(Sin clientes)</option>';
-        selReporte.innerHTML = '<option value="">(Sin clientes)</option>';
-      } else {
-        const optionsHtml = clientList.map(c => `<option value="${c.id}">${c.razon_social}</option>`).join('');
-        selMain.innerHTML = optionsHtml;
-        selModal.innerHTML = optionsHtml;
-        selReporte.innerHTML = optionsHtml;
-        cargarSitios();
+        if (clientList.length === 0) {
+          selMain.innerHTML = '<option value="">(Sin clientes cargados)</option>';
+          selModal.innerHTML = '<option value="">(Sin clientes)</option>';
+          selReporte.innerHTML = '<option value="">(Sin clientes)</option>';
+        } else {
+          const optionsHtml = clientList.map(c => `<option value="${c.id}">${c.razon_social}</option>`).join('');
+          selMain.innerHTML = optionsHtml;
+          selModal.innerHTML = optionsHtml;
+          selReporte.innerHTML = optionsHtml;
+          cargarSitios();
+        }
+      } catch (err) {
+        console.error("Error al cargar clientes:", err);
       }
     }
 
     async function cargarSitios() {
-      const clienteId = document.getElementById('select-cliente').value;
-      const sel = document.getElementById('select-sitio');
-
-      if (!clienteId) {
-        sel.innerHTML = '<option value="">(Sin sitio)</option>';
-        return;
-      }
-
-      const { data: sitios } = await _supabase.from('sitios').select('*').eq('cliente_id', clienteId);
-      if (!sitios || sitios.length === 0) {
-        sel.innerHTML = '<option value="">(Agrega un sitio para este cliente)</option>';
-        return;
-      }
-
-      sel.innerHTML = sitios.map(s => `<option value="${s.id}">${s.nombre_sitio} - ${s.direccion}</option>`).join('');
-    }
-
-    async function renderListaGestion() {
       try {
-        // Cargar Clientes
-        const divClientes = document.getElementById('lista-clientes-delete');
-        divClientes.innerHTML = clientList.map(c => `
-          <div class="list-item" style="flex-direction:column; align-items:flex-start; gap:8px;">
-            <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-              <span><b>${c.razon_social}</b> <small style="color:#7f8c8d;">(${c.telefono || 'Sin Tel'})</small></span>
-              <div>
-                <button class="btn btn-warning" style="padding:4px 8px; font-size:0.8rem; width:auto; margin:0;" onclick="toggleEditCliente('${c.id}')">✏️ Editar</button>
-                <button class="btn btn-danger" style="padding:4px 8px; font-size:0.8rem; width:auto; margin:0;" onclick="eliminarCliente('${c.id}', '${c.razon_social}')">🗑️</button>
-              </div>
-            </div>
-            
-            <div id="edit-form-${c.id}" class="hidden" style="width:100%; background:#f8f9fa; padding:10px; border-radius:6px; box-sizing:border-box;">
-              <label style="margin-top:0;">Teléfono de Contacto</label>
-              <input type="text" id="edit-phone-${c.id}" value="${c.telefono || ''}" placeholder="+54 9 11...">
-              <label>Email para Notificaciones</label>
-              <input type="email" id="edit-email-${c.id}" value="${c.email_contacto || ''}">
-              <button class="btn btn-success" style="padding:8px; font-size:0.85rem; margin-top:8px;" onclick="guardarEdicionCliente('${c.id}')">Guardar Cambios</button>
-            </div>
-          </div>
-        `).join('');
+        const clienteId = document.getElementById('select-cliente').value;
+        const sel = document.getElementById('select-sitio');
 
-        // Cargar Sitios
-        const { data: sitios, error } = await _supabase.from('sitios').select('*');
-        if (error) throw error;
-
-        const divSitios = document.getElementById('lista-sitios-delete');
-        if (!sitios || sitios.length === 0) {
-          divSitios.innerHTML = '<p style="font-size:0.85rem; color:#7f8c8d;">No hay sitios cargados.</p>';
+        if (!clienteId) {
+          sel.innerHTML = '<option value="">(Sin sitio)</option>';
           return;
         }
 
-        divSitios.innerHTML = sitios.map(s => {
-          const clienteAsociado = clientList.find(c => c.id === s.cliente_id);
-          const nombreCliente = clienteAsociado ? clienteAsociado.razon_social : 'S/C';
-          return `
-            <div class="list-item">
-              <span><b>${s.nombre_sitio}</b> (${nombreCliente})</span>
-              <button class="btn btn-danger" onclick="eliminarSitio('${s.id}', '${s.nombre_sitio}')">Eliminar</button>
-            </div>
-          `;
-        }).join('');
+        const { data: sitios } = await _supabase.from('sitios').select('*').eq('cliente_id', clienteId);
+        if (!sitios || sitios.length === 0) {
+          sel.innerHTML = '<option value="">(Agrega un sitio para este cliente)</option>';
+          return;
+        }
 
+        sel.innerHTML = sitios.map(s => `<option value="${s.id}">${s.nombre_sitio} - ${s.direccion}</option>`).join('');
       } catch (err) {
-        alert("Error al cargar lista de gestión: " + err.message);
+        console.error("Error al cargar sitios:", err);
       }
+    }
+
+    async function renderListaGestion() {
+      // Cargar Clientes en lista
+      const divClientes = document.getElementById('lista-clientes-delete');
+      divClientes.innerHTML = clientList.map(c => `
+        <div class="list-item" style="flex-direction:column; align-items:flex-start; gap:8px;">
+          <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+            <span><b>${c.razon_social}</b> <small style="color:#7f8c8d;">(${c.telefono || 'Sin Tel'})</small></span>
+            <div>
+              <button class="btn btn-warning" style="padding:4px 8px; font-size:0.8rem; width:auto; margin:0;" onclick="toggleEditCliente('${c.id}')">✏️ Editar</button>
+              <button class="btn btn-danger" style="padding:4px 8px; font-size:0.8rem; width:auto; margin:0;" onclick="eliminarCliente('${c.id}', '${c.razon_social}')">🗑️</button>
+            </div>
+          </div>
+          
+          <div id="edit-form-${c.id}" class="hidden" style="width:100%; background:#f8f9fa; padding:10px; border-radius:6px; box-sizing:border-box;">
+            <label style="margin-top:0;">Teléfono de Contacto</label>
+            <input type="text" id="edit-phone-${c.id}" value="${c.telefono || ''}" placeholder="+54 9 11...">
+            <label>Email para Notificaciones</label>
+            <input type="email" id="edit-email-${c.id}" value="${c.email_contacto || ''}">
+            <button class="btn btn-success" style="padding:8px; font-size:0.85rem; margin-top:8px;" onclick="guardarEdicionCliente('${c.id}')">Guardar Cambios</button>
+          </div>
+        </div>
+      `).join('');
+
+      // Cargar Sitios en lista sin interrumpir la app si no hay RLS
+      const divSitios = document.getElementById('lista-sitios-delete');
+      const { data: sitios, error } = await _supabase.from('sitios').select('*');
+      
+      if (error || !sitios || sitios.length === 0) {
+        divSitios.innerHTML = '<p style="font-size:0.85rem; color:#7f8c8d;">No hay sitios registrados o falta desactivar RLS en Supabase.</p>';
+        return;
+      }
+
+      divSitios.innerHTML = sitios.map(s => {
+        const clienteAsociado = clientList.find(c => c.id === s.cliente_id);
+        const nombreCliente = clienteAsociado ? clienteAsociado.razon_social : 'S/C';
+        return `
+          <div class="list-item">
+            <span><b>${s.nombre_sitio}</b> (${nombreCliente})</span>
+            <button class="btn btn-danger" onclick="eliminarSitio('${s.id}', '${s.nombre_sitio}')">Eliminar</button>
+          </div>
+        `;
+      }).join('');
     }
 
     function toggleEditCliente(id) {
@@ -371,8 +373,10 @@
     }
 
     async function actualizarContadorPendientes() {
-      const { data } = await _supabase.from('ordenes_trabajo').select('id').eq('estado', 'Pendiente');
-      document.getElementById('count-pending').innerText = (data || []).length;
+      try {
+        const { data } = await _supabase.from('ordenes_trabajo').select('id').eq('estado', 'Pendiente');
+        document.getElementById('count-pending').innerText = (data || []).length;
+      } catch(e) {}
     }
 
     async function mostrarPendientes() {
