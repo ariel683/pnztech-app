@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PNZ Tech - Órdenes de Trabajo</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Librería para generar PDFs reales -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     :root { --primary: #2b5cb1; --accent: #e74c3c; --bg: #f4f6f7; --text: #1a252c; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); margin: 0; padding: 15px; color: var(--text); }
@@ -166,7 +168,7 @@
       <input type="text" id="new-client-cuit" placeholder="Ej: 30-12345678-9">
       <label>Email para Notificaciones *</label>
       <input type="email" id="new-client-email" placeholder="contacto@cliente.com">
-      <label>Teléfono de Contacto (incluir ej: 54911...)</label>
+      <label>Teléfono de Contacto (ej: 54911...)</label>
       <input type="text" id="new-client-phone" placeholder="Ej: 5491112345678">
       <button class="btn btn-success" onclick="guardarCliente()">GUARDAR CLIENTE</button>
       
@@ -214,7 +216,8 @@
     <!-- ACCIONES POST-COMPROBANTE -->
     <div id="exito-card" class="card hidden">
       <h2 style="color: #27ae60;">🎉 ¡Orden Finalizada con Éxito!</h2>
-      <button class="btn btn-wa" onclick="enviarWhatsApp()">📲 ENVIAR POR WHATSAPP</button>
+      <button class="btn btn-wa" onclick="compartirPDFWhatsApp()">📄 ENVIAR PDF ADJUNTO POR WHATSAPP</button>
+      <button class="btn btn-secondary" onclick="enviarTextoWhatsApp()">💬 Enviar Solo Texto por WhatsApp</button>
       <button class="btn" style="background:#34495e;" onclick="nuevaCaptura()">➕ Crear Nueva Orden</button>
     </div>
 
@@ -528,7 +531,7 @@
     }
 
     async function seleccionarOTParaCierre(otId) {
-      const { data } = await _supabase.from('ordenes_trabajo').select('*').eq('id', otId).single();
+      const { data } = await _supabase.from('ordenes_trabajo').select('*, clientes(*), sitios(*)').eq('id', otId).single();
       currentOT = data;
 
       document.getElementById('ot-num-badge').innerText = currentOT.numero_correlativo;
@@ -555,7 +558,13 @@
 
       if (error) return alert("Error al cerrar OT: " + error.message);
 
-      // Obtener el teléfono del cliente asociado a esta OT
+      // Guardar datos temporales en currentOT para el PDF
+      currentOT.tareas_realizadas = tareas;
+      currentOT.insumos_utilizados = insumos;
+      currentOT.nombre_firmante = firmante;
+      currentOT.dni_firmante = dni;
+      currentOT.fecha_fin = new Date().toISOString();
+
       const clienteAsociado = clientList.find(c => c.id === currentOT.cliente_id);
       if (clienteAsociado && clienteAsociado.telefono) {
         clienteTelefonoActual = clienteAsociado.telefono.replace(/[^0-9]/g, '');
@@ -568,7 +577,96 @@
       actualizarContadorPendientes();
     }
 
-    function enviarWhatsApp() {
+    // 📄 GENERAR Y COMPARTIR PDF NATIVO EN EL CELULAR
+    async function compartirPDFWhatsApp() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      const otNum = currentOT ? currentOT.numero_correlativo : 'OT-000';
+      const clienteNombre = currentOT?.clientes?.razon_social || 'Cliente';
+      const sitioNombre = currentOT?.sitios?.nombre_sitio || 'Sitio';
+      const direccion = currentOT?.sitios?.direccion || '-';
+      const fecha = new Date(currentOT.fecha_fin || Date.now()).toLocaleDateString('es-AR');
+
+      // Diseño del Documento PDF
+      doc.setFillColor(43, 92, 177); // Azul PNZ Tech
+      doc.rect(0, 0, 210, 30, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(20);
+      doc.setFont("helvetica", "bold");
+      doc.text("PNZ TECH - COMPROBANTE DE SERVICIO", 15, 20);
+
+      doc.setTextColor(40, 40, 40);
+      doc.setFontSize(12);
+      doc.text(`Número de Orden: ${otNum}`, 15, 45);
+      doc.text(`Fecha de Finalización: ${fecha}`, 15, 52);
+
+      doc.setDrawColor(200, 200, 200);
+      doc.line(15, 58, 195, 58);
+
+      doc.setFont("helvetica", "bold");
+      doc.text("DATOS DEL CLIENTE", 15, 68);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Cliente / Razón Social: ${clienteNombre}`, 15, 76);
+      doc.text(`Sitio / Sucursal: ${sitioNombre}`, 15, 83);
+      doc.text(`Dirección: ${direccion}`, 15, 90);
+
+      doc.setFont("helvetica", "bold");
+      doc.text("DETALLE DEL TRABAJO REALIZADO", 15, 105);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Categoría: ${currentOT.categoria_problema || 'Servicio Técnico'}`, 15, 113);
+      
+      doc.text("Tareas Efecutuadas:", 15, 123);
+      const tareasLines = doc.splitTextToSize(currentOT.tareas_realizadas || '-', 180);
+      doc.text(tareasLines, 15, 130);
+
+      let nextY = 130 + (tareasLines.length * 7) + 5;
+
+      if (currentOT.insumos_utilizados) {
+        doc.setFont("helvetica", "bold");
+        doc.text("Insumos Utilizados:", 15, nextY);
+        doc.setFont("helvetica", "normal");
+        nextY += 7;
+        const insumoLines = doc.splitTextToSize(currentOT.insumos_utilizados, 180);
+        doc.text(insumoLines, 15, nextY);
+        nextY += (insumoLines.length * 7) + 10;
+      } else {
+        nextY += 10;
+      }
+
+      doc.line(15, nextY, 195, nextY);
+      nextY += 12;
+
+      doc.setFont("helvetica", "bold");
+      doc.text("CONFORMIDAD DEL CLIENTE", 15, nextY);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Recibió Conforme: ${currentOT.nombre_firmante}`, 15, nextY + 8);
+      doc.text(`DNI / Identificación: ${currentOT.dni_firmante}`, 15, nextY + 15);
+
+      // Generar el archivo Blob en memoria
+      const pdfBlob = doc.output('blob');
+      const file = new File([pdfBlob], `${otNum}_Comprobante_PNZTech.pdf`, { type: 'application/pdf' });
+
+      // Verificar si el navegador soporta compartir archivos
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: `Comprobante ${otNum} - PNZ Tech`,
+            text: `Adjuntamos el comprobante de servicio ${otNum} realizado por PNZ Tech.`
+          });
+        } catch (err) {
+          console.log("Compartir cancelado o no soportado");
+        }
+      } else {
+        // Si el navegador no permite compartir directo, lo descarga
+        doc.save(`${otNum}_Comprobante_PNZTech.pdf`);
+        alert("El PDF se descargó en tu teléfono. Podés adjuntarlo directamente en el chat de WhatsApp.");
+      }
+    }
+
+    function enviarTextoWhatsApp() {
       const numOT = currentOT ? currentOT.numero_correlativo : '';
       const firmanteText = document.getElementById('input-firmante').value;
       const tareasText = document.getElementById('input-tareas').value;
